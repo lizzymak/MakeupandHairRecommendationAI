@@ -6,8 +6,10 @@ from io import BytesIO
 from PIL import Image
 import face_alignment
 from skimage import img_as_ubyte
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # Load Haar cascade for face detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -39,6 +41,12 @@ def detect_face_region(bgr_image):
     return bgr_image[y1:y2, x1:x2]
 
 def extract_skin_pixels(bgr_image):
+    # Resize the face to max dimension for faster processing
+    h, w = bgr_image.shape[:2]
+    scale = 200 / max(h, w)
+    if scale < 1.0:
+        bgr_image = cv2.resize(bgr_image, (int(w * scale), int(h * scale)))
+
     # convert to hsv 
     hsv = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
 
@@ -66,14 +74,14 @@ def extract_skin_pixels(bgr_image):
 def dominant_color_kmeans(pixels, n_clusters=3):
     if len(pixels) == 0:
         return None
-    if len(pixels) > 5000:
-        idx = np.random.choice(len(pixels), 5000, replace=False)
+    if len(pixels) > 1000:
+        idx = np.random.choice(len(pixels), 1000, replace=False)
         sample = pixels[idx]
-        # if sample is too big we pick a random 5000 pixels
+        # if sample is too big we pick a random 1000 pixels
     else:
         sample = pixels
     # cluster pixels into 3 groups, each cluster is a color region
-    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(sample)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init=3).fit(sample)
     #pick cluster with most pixels aka the most dominant color
     labels, counts = np.unique(kmeans.labels_, return_counts=True)
     largest = labels[np.argmax(counts)]
@@ -147,7 +155,7 @@ def classify_face_shape(landmarks):
     elif cheek_ratio > 0.85:
         return "round"
     else:
-        return f"heart {jaw_ratio} {cheek_ratio}"
+        return "heart"
     
 def classify_eye_shape(landmarks):
     left_eye = landmarks["left_eye"]
