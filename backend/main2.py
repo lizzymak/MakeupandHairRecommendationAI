@@ -4,11 +4,15 @@ import numpy as np
 from sklearn.cluster import KMeans
 from io import BytesIO
 from PIL import Image
+import face_alignment
+from skimage import img_as_ubyte
 
 app = Flask(__name__)
 
 # Load Haar cascade for face detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+# load face_alignment for face landmarks
+fa = face_alignment.FaceAlignment(face_alignment.LandmarksType.TWO_D, flip_input=False, device='cpu')
 
 # used to detect face shape with a little bit of padding for skin tone extraction
 def detect_face_region(bgr_image):
@@ -93,6 +97,78 @@ def classify_undertone(rgb_color):
     else:
         return "neutral"
     
+def detect_landmarks(bgr_image):
+    # use face_alignment to extract landmarks for face and eyes
+
+    #convert to rgb
+    rgb_face = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+    rgb_face = img_as_ubyte(rgb_face)  # ensure correct dtype
+
+    preds = fa.get_landmarks(rgb_face) #get landmarks from img
+    if preds is None:
+        return None
+    landmarks = preds[0] #first element in list is landmarks for the face detected
+    return {
+        "jawline": landmarks[0:17],
+        "right_eyebrow": landmarks[17:21],
+        "left_eyebrow": landmarks[22:26],
+        "left_eye": landmarks[36:42],
+        "right_eye": landmarks[42:48],
+        "nose": landmarks[27:36],
+        "lips": landmarks[48:68]
+    }
+
+def classify_face_shape(landmarks):
+    # jaw width
+    jaw = landmarks["jawline"]
+    jaw_left = jaw[0]
+    jaw_right = jaw[-1]
+    jaw_width = np.linalg.norm(jaw_right - jaw_left)
+
+    # face height
+    chin = jaw[8] 
+    #approximate forehead height using eyebrow location
+    left_eyebrow = min(landmarks["left_eyebrow"][:,1])
+    right_eyebrow = min(landmarks["right_eyebrow"][:,1])
+    eyebrow_top = min(left_eyebrow, right_eyebrow)
+
+    # forehead will probaly be around 20% of the the rest of the face
+    estimated_forehead_y = eyebrow_top - 0.2 * (chin[1] - eyebrow_top)
+    face_height = chin[1] - estimated_forehead_y
+    jaw_ratio = jaw_width / face_height
+
+    cheekbone_width = np.linalg.norm(jaw[13] - jaw[3])
+    cheek_ratio = cheekbone_width / face_height
+
+    if jaw_ratio < 0.8 and cheek_ratio < 0.9:
+        return "oval"
+    elif jaw_ratio > 1.0:
+        return "square"
+    elif cheek_ratio > 0.85:
+        return "round"
+    else:
+        return f"heart {jaw_ratio} {cheek_ratio}"
+    
+def classify_eye_shape(landmarks):
+    left_eye = landmarks["left_eye"]
+    right_eye = landmarks["right_eye"]
+
+    #ratio of heigtht and width
+    def eye_ratio(eye):
+        h = np.linalg.norm(eye[1] - eye[5]) # right inner corner - left inner corner
+        w = np.linalg.norm(eye[3] - eye[0]) # top inner lid - bottom inner lid
+        return h/w
+    
+    avg_ratio = (eye_ratio(left_eye) + eye_ratio(right_eye))/2
+    if avg_ratio < 0.25:
+        return "almond"
+    elif avg_ratio < 0.35:
+        return "hooded"
+    else:
+        return "round"
+
+
+    
 PALETTES = {
     "warm": ["#E07A5F", "#F2CC8F", "#81B29A"],
     "cool": ["#6D597A", "#355070", "#E56BC4"],
@@ -129,10 +205,19 @@ def analyze_image():
     r, g, b = map(float, dominant)
     undertone = classify_undertone([r, g, b])
 
+    landmarks = detect_landmarks(face)
+    if landmarks is None:
+        return jsonify({"error": "no landmarks"})
+    
+    face_shape = classify_face_shape(landmarks)
+    eye_shape = classify_eye_shape(landmarks)
+
     return jsonify({
         "undertone": undertone,
         "dominant_color_rgb": [int(r), int(g), int(b)],
-        "recommended_palette": PALETTES.get(undertone, PALETTES["neutral"])
+        "recommended_palette": PALETTES.get(undertone, PALETTES["neutral"]),
+        "face_shape" : face_shape,
+        "eye_shape": eye_shape
     })
     
 if __name__ == '__main__':
