@@ -1,42 +1,51 @@
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
   text-align: center;
+  height: 100vh;
+  width: 100%;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+h2{
+  margin-block-start: 50px;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.gridContainer{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 150px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.mainLayout{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 100px;
+  
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.uploadArea{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  height: fit-content;
+}
+.uploadArea form{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  row-gap:20px;
 }
 
-.card {
-  padding: 2em;
+.categoryBox{
+  display: inline-block;
+  background-Color: gray;
+  padding: 5px;
+  border-radius: 4px;
 }
-
-.read-the-docs {
-  color: #888;
+.categoryLine{
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  align-items: center;
 }
